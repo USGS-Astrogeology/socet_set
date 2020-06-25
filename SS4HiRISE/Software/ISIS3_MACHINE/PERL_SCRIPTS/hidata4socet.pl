@@ -32,12 +32,25 @@ $isis3arc_dd_path = "/home/thare/bin/";
 
 $email = "PlanetaryPhotogrammetry\@usgs.gov";
 
-$isisversion = "isis3.4.9";
+#####################################################################
+# remove static define for recommended ISIS version
+# $isisversion = "isis3.9.1";
+
+$isisversion = `printenv ISIS_VERSION`;
+chomp ($isisversion);
+$len = length($isisversion);
+if ($len == 0)
+{
+  print "\nISIS_VERSION not set in your environment\n";
+  print "there are no longer checks for version, trying to continue.\n\n";
+}
+
+#####################################################################
 
 my $usage = "
 
 **************************************************************************
-**** NOTE: $progname runs under isis version: $isisversion  ****
+*** NOTE: $progname currently running under isis version: $isisversion ***
 **************************************************************************
 
 Command:  $progname project_name noproj_img1 noproj_img2
@@ -76,10 +89,10 @@ Description:
 **************************************************************************
 **************************************************************************
 NOTICE:
-       $progname runs under isis version: $isisversion
+       $progname currently running under isis version: $isisversion
        This script is not supported by ISIS.
-       If you have problems please contact the Astrogeology Photogrammetry group
-       at $email
+       If you have problems please contact the Astrogeology Planetary
+       Photogrammetry Lab (APPL Lab) at $email
 **************************************************************************
 **************************************************************************
 ";
@@ -124,6 +137,13 @@ NOTICE:
 #                         for script portability:
 #                           1) added $PEDR2TABPRM_path
 #                           2) Updated contact to PlanetaryPhotogrammetry
+#           Jun 25 2020 - TMH 1) updated to support new APPL env.
+#                         /usgs/cdev/contrib/bin/.bashrc.APPL
+#                         This is where the current version of
+#                         ISIS is defined within the environment
+#                         variable $ISIS_VERSION
+#                         2) removed setisis test for dpw-user group
+#
 #####################################################################
 
 #--------------------------------------------------------------------
@@ -134,33 +154,27 @@ NOTICE:
    $| = 1;
 
 #--------------------------------------------------------------------
-# First make sure this is a "flagstaf" machine and setisis was run
+# First make sure setisis or conda activate for ISIS3 was run
 #--------------------------------------------------------------------
+   $ISISexists = `command -v getkey`;
+   chomp ($ISISexists);
+   $len = length($ISISexists);
+   if ($len == 0)
+   {
+      print "\nISIS IS NOT IN THE PATH ...ENTER:\n";
 
-  $GROUP = `printenv GROUP`;
-  chomp ($GROUP);
-
-  if ($GROUP eq "flagstaf")
-     {
-     $ISISVERSION = `printenv IsisVersion`;
-     chomp ($ISISVERSION);
-     $len = length($ISISVERSION);
-     if ($len == 0)
-        {
-        print "\nISIS VERSION MUST BE ESTABLISHED FIRST...ENTER:\n";
-        print "\nsetisis $isisversion\n\n";
-        exit 1;
-        }
-     }
-
-#---------------------------------------------------------------------
-# Get this system's $ISISROOT/bin absolute path to be used for running
-# getkey
-# --------------------------------------------------------------------
-
-  $ISISROOT_bin_path = `printenv ISISROOT`;
-  chomp($ISISROOT_bin_path);
-  $ISISROOT_bin_path = $ISISROOT_bin_path . "/bin";
+      print "setisis $isisversion\n";
+      print "or\nconda actvate isis$isisversion\n\n";
+      exit 1;
+   }
+   # Check to make sure getkey in run from the ISIS environment
+   if (index($ISISexists, "isis") == -1) {
+      print "\ngetkey from this path: $ISISexists\n";
+      print "    does not appear to the required version from ISIS.\n";
+      print "    Please make sure the ISIS path is set such that\n";
+      print "    getkey from the ISIS installation is called first.\n";
+      exit 1;
+   }
 
 #---------------------------------------------------------------------
 # Check the argument list
@@ -341,8 +355,8 @@ NOTICE:
   $cmd = "stats from=$temp_mola to=$temp_pvl";
   system($cmd) == 0 || ReportErrAndDie ("stats failed on command:\n$cmd");
 
-  $minZ = `$ISISROOT_bin_path/getkey from=$temp_pvl grpname=Results keyword=Minimum`;
-  $maxZ = `$ISISROOT_bin_path/getkey from=$temp_pvl grpname=Results keyword=Maximum`;
+  $minZ = `getkey from=$temp_pvl grpname=Results keyword=Minimum`;
+  $maxZ = `getkey from=$temp_pvl grpname=Results keyword=Maximum`;
   chomp($minZ);
   chomp($maxZ);
 
@@ -488,8 +502,8 @@ sub ographic_mbr #cube ul_lat ul_lon lr_lat lr_lon
                  #@_[0] $_[1]  $_[2]  $_[3]  $_[4]
    {
 
-     $ns = `$ISISROOT_bin_path/getkey from=@_[0] grpname=Dimensions keyword=Samples`;
-     $nl = `$ISISROOT_bin_path/getkey from=@_[0] grpname=Dimensions keyword=Lines`;
+     $ns = `getkey from=@_[0] grpname=Dimensions keyword=Samples`;
+     $nl = `getkey from=@_[0] grpname=Dimensions keyword=Lines`;
      chomp($ns);
      chomp($n1);
 
@@ -497,29 +511,29 @@ sub ographic_mbr #cube ul_lat ul_lon lr_lat lr_lon
 
      $cmd = "campt from=@_[0] to=$temp_pvl append=no sample=1 line=1";
      system($cmd) == 0 || ReportErrAndDie ("campt failed on command:\n$cmd");
-     $ul_lat = `$ISISROOT_bin_path/getkey from=$temp_pvl grpname=GroundPoint keyword=PlanetographicLatitude`;
-     $ul_lon = `$ISISROOT_bin_path/getkey from=$temp_pvl grpname=GroundPoint keyword=PositiveEast180Longitude`;
+     $ul_lat = `getkey from=$temp_pvl grpname=GroundPoint keyword=PlanetographicLatitude`;
+     $ul_lon = `getkey from=$temp_pvl grpname=GroundPoint keyword=PositiveEast180Longitude`;
      chomp ($ul_lat);
      chomp ($ul_lon);
 
      $cmd = "campt from=@_[0] to=$temp_pvl append=no sample=$ns line=1";
      system($cmd) == 0 || ReportErrAndDie ("campt failed on command:\n$cmd");
-     $ur_lat = `$ISISROOT_bin_path/getkey from=$temp_pvl grpname=GroundPoint keyword=PlanetographicLatitude`;
-     $ur_lon = `$ISISROOT_bin_path/getkey from=$temp_pvl grpname=GroundPoint keyword=PositiveEast180Longitude`;
+     $ur_lat = `getkey from=$temp_pvl grpname=GroundPoint keyword=PlanetographicLatitude`;
+     $ur_lon = `getkey from=$temp_pvl grpname=GroundPoint keyword=PositiveEast180Longitude`;
      chomp($ur_lat);
      chomp($ur_lon);
 
      $cmd = "campt from=@_[0] to=$temp_pvl append=no sample=1 line=$nl";
      system($cmd) == 0 || ReportErrAndDie ("campt failed on command:\n$cmd");
-     $ll_lat = `$ISISROOT_bin_path/getkey from=$temp_pvl grpname=GroundPoint keyword=PlanetographicLatitude`;
-     $ll_lon = `$ISISROOT_bin_path/getkey from=$temp_pvl grpname=GroundPoint keyword=PositiveEast180Longitude`;
+     $ll_lat = `getkey from=$temp_pvl grpname=GroundPoint keyword=PlanetographicLatitude`;
+     $ll_lon = `getkey from=$temp_pvl grpname=GroundPoint keyword=PositiveEast180Longitude`;
      chomp($ll_lat);
      chomp($ll_lon);
 
      $cmd = "campt from=@_[0] to=$temp_pvl append=no sample=$ns line=$nl";
      system($cmd) == 0 || ReportErrAndDie ("campt failed on command:\n$cmd");
-     $lr_lat = `$ISISROOT_bin_path/getkey from=$temp_pvl grpname=GroundPoint keyword=PlanetographicLatitude`;
-     $lr_lon = `$ISISROOT_bin_path/getkey from=$temp_pvl grpname=GroundPoint keyword=PositiveEast180Longitude`;
+     $lr_lat = `getkey from=$temp_pvl grpname=GroundPoint keyword=PlanetographicLatitude`;
+     $lr_lon = `getkey from=$temp_pvl grpname=GroundPoint keyword=PositiveEast180Longitude`;
      chomp($lr_lat);
      chomp($lr_lon);
 
@@ -548,8 +562,8 @@ sub ocentric_mbr #cube ul_lat ul_lon lr_lat lr_lon
                  #@_[0] $_[1]  $_[2]  $_[3]  $_[4]
    {
 
-     $ns = `$ISISROOT_bin_path/getkey from=@_[0] grpname=Dimensions keyword=Samples`;
-     $nl = `$ISISROOT_bin_path/getkey from=@_[0] grpname=Dimensions keyword=Lines`;
+     $ns = `getkey from=@_[0] grpname=Dimensions keyword=Samples`;
+     $nl = `getkey from=@_[0] grpname=Dimensions keyword=Lines`;
      chomp($ns);
      chomp($n1);
 
@@ -557,29 +571,29 @@ sub ocentric_mbr #cube ul_lat ul_lon lr_lat lr_lon
 
      $cmd = "campt from=@_[0] to=$temp_pvl append=no sample=1 line=1";
      system($cmd) == 0 || ReportErrAndDie ("campt failed on command:\n$cmd");
-     $ul_lat = `$ISISROOT_bin_path/getkey from=$temp_pvl grpname=GroundPoint keyword=PlanetocentricLatitude`;
-     $ul_lon = `$ISISROOT_bin_path/getkey from=$temp_pvl grpname=GroundPoint keyword=PositiveEast360Longitude`;
+     $ul_lat = `getkey from=$temp_pvl grpname=GroundPoint keyword=PlanetocentricLatitude`;
+     $ul_lon = `getkey from=$temp_pvl grpname=GroundPoint keyword=PositiveEast360Longitude`;
      chomp ($ul_lat);
      chomp ($ul_lon);
 
      $cmd = "campt from=@_[0] to=$temp_pvl append=no sample=$ns line=1";
      system($cmd) == 0 || ReportErrAndDie ("campt failed on command:\n$cmd");
-     $ur_lat = `$ISISROOT_bin_path/getkey from=$temp_pvl grpname=GroundPoint keyword=PlanetocentricLatitude`;
-     $ur_lon = `$ISISROOT_bin_path/getkey from=$temp_pvl grpname=GroundPoint keyword=PositiveEast360Longitude`;
+     $ur_lat = `getkey from=$temp_pvl grpname=GroundPoint keyword=PlanetocentricLatitude`;
+     $ur_lon = `getkey from=$temp_pvl grpname=GroundPoint keyword=PositiveEast360Longitude`;
      chomp($ur_lat);
      chomp($ur_lon);
 
      $cmd = "campt from=@_[0] to=$temp_pvl append=no sample=1 line=$nl";
      system($cmd) == 0 || ReportErrAndDie ("campt failed on command:\n$cmd");
-     $ll_lat = `$ISISROOT_bin_path/getkey from=$temp_pvl grpname=GroundPoint keyword=PlanetocentricLatitude`;
-     $ll_lon = `$ISISROOT_bin_path/getkey from=$temp_pvl grpname=GroundPoint keyword=PositiveEast360Longitude`;
+     $ll_lat = `getkey from=$temp_pvl grpname=GroundPoint keyword=PlanetocentricLatitude`;
+     $ll_lon = `getkey from=$temp_pvl grpname=GroundPoint keyword=PositiveEast360Longitude`;
      chomp($ll_lat);
      chomp($ll_lon);
 
      $cmd = "campt from=@_[0] to=$temp_pvl append=no sample=$ns line=$nl";
      system($cmd) == 0 || ReportErrAndDie ("campt failed on command:\n$cmd");
-     $lr_lat = `$ISISROOT_bin_path/getkey from=$temp_pvl grpname=GroundPoint keyword=PlanetocentricLatitude`;
-     $lr_lon = `$ISISROOT_bin_path/getkey from=$temp_pvl grpname=GroundPoint keyword=PositiveEast360Longitude`;
+     $lr_lat = `getkey from=$temp_pvl grpname=GroundPoint keyword=PlanetocentricLatitude`;
+     $lr_lon = `getkey from=$temp_pvl grpname=GroundPoint keyword=PositiveEast360Longitude`;
      chomp($lr_lat);
      chomp($lr_lon);
 

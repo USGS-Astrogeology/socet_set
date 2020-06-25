@@ -11,26 +11,32 @@
 ################################################################################
 
 use File::Copy;
+use File::Basename;
+use Cwd;
 
 my ($progname) = ($0 =~ m#([^/]+)$#);  # get the name of this program
 
-################################################################################
-#
-# Location-dependent paths, fix for your system:
-
-$hinoproj_path = "/usgs/cdev/contrib/bin/";
-
-# End of Location-dependent paths
-################################################################################
- 
 $email = "PlanetaryPhotogrammetry\@usgs.gov";
 
-$isisversion = "isis3.4.7";
+#####################################################################
+# remove static define for recommended ISIS version
+# $isisversion = "isis3.9.1";
+
+$isisversion = `printenv ISIS_VERSION`;
+chomp ($isisversion);
+$len = length($isisversion);
+if ($len == 0)
+{
+  print "\nISIS_VERSION not set in your environment\n";
+  print "there are no longer checks for version, trying to continue.\n\n";
+}
+
+#####################################################################
 
 my $usage = "
 
 **************************************************************************
-**** NOTE: $progname runs under isis version: $isisversion  ****
+*** NOTE: $progname currently running under isis version: $isisversion ***
 **************************************************************************
 
 Command:  $progname fromlist [matchCube]
@@ -48,7 +54,6 @@ Where:
        placement of the noproj'ed CCDs via hijitreg.  The default is RED5.
 
 Description:
-
        $progname performs ISIS3 processing on HiRISE RED CCDs to create
        the images and files neeeded for Socet Set stereoprocessing.
        Specifically, $progname:
@@ -61,7 +66,7 @@ Description:
              sensor model's keywords and values (*_keywords.lis)
 
        You will need to bring only the *.raw and *_keywords.lis files to
-       your Socet Set workstation and run import_pushbroom to do the import.
+       your Socet Set workstation and run import_pushbroom to import.
 
        Errors encountered in the processing goes to files:
        \"hi4socet.err\" and \"hinoproj.err\"
@@ -71,10 +76,10 @@ Description:
 **************************************************************************
 **************************************************************************
 NOTICE:
-       $progname runs under isis version: $isisversion
+       $progname currently running under isis version: $isisversion
        This script is not supported by ISIS.
-       If you have problems please contact the Astrogeology Photogrammetry group
-       at $email
+       If you have problems please contact the Astrogeology Planetary
+       Photogrammetry Lab (APPL Lab) at $email
 **************************************************************************
 **************************************************************************
 ";
@@ -162,6 +167,13 @@ NOTICE:
 #                            Photogrammetry group
 #                         3) Added setisis test for dpw-user group
 #           Jun 12 2015 - EHK verified to run under isis3.4.9
+#           Jun 25 2020 - TMH 1) updated to support new APPL env.
+#                         /usgs/cdev/contrib/bin/.bashrc.APPL
+#                         This is where the current version of
+#                         ISIS is defined within the environment
+#                         variable $ISIS_VERSION
+#                         2) removed setisis test for dpw-user group
+#
 #####################################################################
 
 #--------------------------------------------------------------------
@@ -172,34 +184,40 @@ NOTICE:
    $| = 1;
 
 #--------------------------------------------------------------------
-# First make sure this is a "flagstaf" machine and setisis was run
+# First make sure setisis or conda activate for ISIS3 was run
 #--------------------------------------------------------------------
+   $ISISexists = `command -v getkey`;
+   chomp ($ISISexists);
+   $len = length($ISISexists);
+   if ($len == 0)
+   {
+      print "\nISIS IS NOT IN THE PATH ...ENTER:\n";
 
-  $GROUP = `printenv GROUP`;
-  chomp ($GROUP);
+      print "setisis $isisversion\n";
+      print "or\nconda actvate isis$isisversion\n\n";
+      exit 1;
+   }
+   # Check to make sure getkey in run from the ISIS environment
+   if (index($ISISexists, "isis") == -1) {
+      print "\ngetkey from this path: $ISISexists\n";
+      print "    does not appear to the required version from ISIS.\n";
+      print "    Please make sure the ISIS path is set such that\n";
+      print "    getkey from the ISIS installation is called first.\n";
+      exit 1;
+   }
 
-  if ($GROUP eq "flagstaf"|| $GROUP eq "dpw-user")
-     { 
-     $ISISVERSION = `printenv IsisVersion`;
-     chomp ($ISISVERSION);
-     $len = length($ISISVERSION);
-     if ($len == 0)
-        {
-        print "\nISIS VERSION MUST BE ESTABLISHED FIRST...ENTER:\n";
-        print "\nsetisis $isisversion\n\n";
-        exit 1;
-        }
-     }
-
-#---------------------------------------------------------------------
-# Get this system's $ISISROOT/bin absolute path to be used for running
-# getkey
-# --------------------------------------------------------------------
-
-  $ISISROOT_bin_path = `printenv ISISROOT`;
-  chomp($ISISROOT_bin_path);
-  $ISISROOT_bin_path = $ISISROOT_bin_path . "/bin";
- 
+#--------------------------------------------------------------------
+# Check for hinoproj.pl is in your path
+#--------------------------------------------------------------------
+   $hinoproj_exists = `command -v hinoproj.pl`;
+   chomp ($hinoproj_exists);
+   $len = length($hinoproj_exists);
+   if ($len == 0)
+   {
+      print "\nhinoproj.pl IS NOT IN YOUR PATH\n";
+      exit 1;
+   }
+      
 #---------------------------------------------------------------------
 # Check the argument list
 #---------------------------------------------------------------------
@@ -274,11 +292,11 @@ NOTICE:
          {
          chomp($input);
 
-         $CCD = `$ISISROOT_bin_path/getkey from=$input grpname=Instrument keyword=CcdId`;
+         $CCD = "getkey from=$input grpname=Instrument keyword=CcdId";
          chomp ($CCD);
          $len = length($CCD);
          if($len == 0) { 
-           $cmd = "$ISISROOT_bin_path/getkey from=$input grpname=Instrument keyword=CcdId";
+           $cmd = "getkey from=$input grpname=Instrument keyword=CcdId";
            ReportErrAndDie("getkey failed on command:\n$cmd");
          }
 
@@ -308,10 +326,12 @@ NOTICE:
    $mosCube = $core_name . "mos_hijitreged" . $ext2 . ".noproj.cub";
 
 #---------------------------------------------------------------------
-# Run hinoproj.pl to geneate a mosaic of noproj'ed CCDs
+# Run hinoproj.pl to generate a mosaic of noproj'ed CCDs
 #---------------------------------------------------------------------
 
-   $cmd = "$hinoproj_path/hinoproj.pl $fromlist $matchCube";
+#TEMP patch
+   $cmd = "hinoproj.pl $fromlist $matchCube";
+   #$cmd = "hinoproj.pl $fromlist $matchCube";
    system($cmd) == 0 || ReportErrAndDie("hinoproj.pl failed on command:\n$cmd");
 
 #---------------------------------------------------------------------
@@ -334,18 +354,18 @@ NOTICE:
    $cmd = "percent from=$mosCube to=p9995.temp.txt percentage=99.95";
    system($cmd) == 0 || ReportErrAndDie("percent failed on command:\n$cmd");
 
-   $min = `$ISISROOT_bin_path/getkey from=p0005.temp.txt grpname=Results keyword=Value`;
+   $min = `getkey from=p0005.temp.txt grpname=Results keyword=Value`;
    $len = length($min);
    if($len == 0) {
-     $cmd = "$ISISROOT_bin_path/getkey from=p0005.temp.txt grpname=Results keyword=Value";
+     $cmd = "getkey from=p0005.temp.txt grpname=Results keyword=Value";
      ReportErrAndDie("getkey failed on command:\n$cmd");
    }
    chomp ($min);
 
-   $max = `$ISISROOT_bin_path/getkey from=p9995.temp.txt grpname=Results keyword=Value`;
+   $max = `getkey from=p9995.temp.txt grpname=Results keyword=Value`;
    $len = length($max);
    if($len == 0) { 
-     $cmd = "$ISISROOT_bin_path/getkey from=p9995.temp.txt grpname=Results keyword=Value";
+     $cmd = "getkey from=p9995.temp.txt grpname=Results keyword=Value";
      ReportErrAndDie("getkey failed on command:\n$cmd");
    }
    chomp ($max);
