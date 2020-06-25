@@ -4,22 +4,39 @@
 # NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE
 #
 #      This script is not supported by ISIS.
-#      If you have problems please contact Astrogeology Photogrammetry group
+#      If you have problems please contact the Astrogeology Photogrammetry group
 #      at PlanetaryPhotogrammetry@usgs.gov
 #
 # NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE
 ################################################################################
 
+use File::Copy;
+use File::Basename;
+use Cwd;
+
 my ($progname) = ($0 =~ m#([^/]+)$#);  # get the name of this program
 
 $email = "PlanetaryPhotogrammetry\@usgs.gov";
 
-$isisversion = "isis3.4.7";
+#####################################################################
+# remove static define for recommended ISIS version
+# $isisversion = "isis3.9.1";
+
+$isisversion = `printenv ISIS_VERSION`;
+chomp ($isisversion);
+$len = length($isisversion);
+if ($len == 0)
+{
+  print "\nISIS_VERSION not set in your environment\n";
+  print "there are no longer checks for version, trying to continue.\n\n";
+}
+
+#####################################################################
 
 my $usage = "
 
 **************************************************************************
-**** NOTE: $progname runs under isis version: $isisversion  ****
+*** NOTE: $progname currently running under isis version: $isisversion ***
 **************************************************************************
 
 Command:  $progname fromlist [matchCube]
@@ -57,10 +74,10 @@ Description:
 **************************************************************************
 **************************************************************************
 NOTICE:
-       NOTE: $progname runs under isis version: $isisversion
+       $progname currently running under isis version: $isisversion
        This script is not supported by ISIS.
-       If you have problems please contact Annie Howington-Kraus
-       at $email 
+       If you have problems please contact the Astrogeology Planetary
+       Photogrammetry Lab (APPL Lab) at $email
 **************************************************************************
 **************************************************************************
 
@@ -117,10 +134,18 @@ NOTICE:
 #                            version of getkey on their systems
 #                         3) updated documentation
 #           Jul  2 2013 - EHK, verified to run under isis3.4.4
-#           Sep 4 2013 - EHK,
+#           Sep  4 2014 - EHK,
 #                         1) Verified to run under isis3.4.7
 #                         2) Update contact information to Planetary
 #                            Photogrammetry group
+#           Jun 23 2015 - EHK Verified to run under isis3.4.9
+#           Jun 25 2020 - TMH 1) updated to support new APPL env.
+#                         /usgs/cdev/contrib/bin/.bashrc.APPL
+#                         This is where the current version of
+#                         ISIS is defined within the environment
+#                         variable $ISIS_VERSION
+#                         2) removed setisis test for dpw-user group
+#
 #####################################################################
 
 #---------------------------------------------------------------------
@@ -130,14 +155,28 @@ NOTICE:
 #---------------------------------------------------------------------
    $| = 1;
 
-#---------------------------------------------------------------------
-# Get this system's $ISISROOT/bin absolute path to be used for running
-# getkey
-# --------------------------------------------------------------------
+#--------------------------------------------------------------------
+# First make sure setisis or conda activate for ISIS3 was run
+#--------------------------------------------------------------------
+   $ISISexists = `command -v getkey`;
+   chomp ($ISISexists);
+   $len = length($ISISexists);
+   if ($len == 0)
+   {
+      print "\nISIS IS NOT IN THE PATH ...ENTER:\n";
 
-  $ISISROOT_bin_path = `printenv ISISROOT`;
-  chomp($ISISROOT_bin_path);
-  $ISISROOT_bin_path = $ISISROOT_bin_path . "/bin";
+      print "setisis $isisversion\n";
+      print "or\nconda actvate isis$isisversion\n\n";
+      exit 1;
+   }
+   # Check to make sure getkey in run from the ISIS environment
+   if (index($ISISexists, "isis") == -1) {
+      print "\ngetkey from this path: $ISISexists\n";
+      print "    does not appear to the required version from ISIS.\n";
+      print "    Please make sure the ISIS path is set such that\n";
+      print "    getkey from the ISIS installation is called first.\n";
+      exit 1;
+   }
 
 #---------------------------------------------------------------------
 # Check the argument list
@@ -214,11 +253,11 @@ NOTICE:
          $input=<LST>;
          chomp($input);
 
-         $CCD = `$ISISROOT_bin_path/getkey from=$input grpname=Instrument keyword=CcdId`;
+         $CCD = `getkey from=$input grpname=Instrument keyword=CcdId`;
          chomp ($CCD);
          $len = length($CCD);
          if($len == 0) { 
-           $cmd = "$ISISROOT_bin_path/getkey from=$input grpname=Instrument keyword=CcdId";
+           $cmd = "getkey from=$input grpname=Instrument keyword=CcdId";
            ReportErrAndDie("getkey failed on command:\n$cmd"); 
          }
 
@@ -231,11 +270,11 @@ NOTICE:
       }
    else
       {
-      $CCD = `$ISISROOT_bin_path/getkey from=$matchCube grpname=Instrument keyword=CcdId`;
+      $CCD = `getkey from=$matchCube grpname=Instrument keyword=CcdId`;
       chomp ($CCD);
       $len = length($CCD);
       if($len == 0) {
-        $cmd = "$ISISROOT_bin_path/getkey from=$matchCube grpname=Instrument keyword=CcdId";
+        $cmd = "getkey from=$matchCube grpname=Instrument keyword=CcdId";
         ReportErrAndDie("getkey failed on command:\n$cmd"); 
       }
 
@@ -266,11 +305,11 @@ NOTICE:
       {
       chomp($input);
 
-      $CCD = `$ISISROOT_bin_path/getkey from=$input grpname=Instrument keyword=CcdId`;
+      $CCD = `getkey from=$input grpname=Instrument keyword=CcdId`;
       chomp ($CCD);
       $len = length($CCD);
       if($len == 0) { 
-        $cmd = "$ISISROOT_bin_path/getkey from=$input grpname=Instrument keyword=CcdId";
+        $cmd = "getkey from=$input grpname=Instrument keyword=CcdId";
         ReportErrAndDie("getkey failed on command:\n$cmd"); 
       }
 
